@@ -447,7 +447,7 @@
 // ─────────────────────────────────────────────
 const THINGSPEAK_CHANNEL = "3328369";
 const THINGSPEAK_URL     = `https://api.thingspeak.com/channels/${THINGSPEAK_CHANNEL}/feeds/last.json`;
-const REFRESH_MS         = 20000;   // match ESP8266 delay(20000)
+const REFRESH_MS         = 60000;   // match ESP8266 delay(20000)
 const HISTORY_SIZE       = 10;
 
 // ─────────────────────────────────────────────
@@ -466,9 +466,9 @@ async function fetchData() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const raw = await res.json();
 
-    const temp     = parseFloat(raw.field1);
-    const humidity = parseFloat(raw.field2);
-    const soil     = parseInt(raw.field3);
+    const temp     = parseFloat(raw.field1) || 0;
+const humidity = parseFloat(raw.field2) || 0;
+const soil     = parseInt(raw.field3)  || 0;
 
     // Validate – ThingSpeak can return null fields
     if (isNaN(temp) || isNaN(humidity) || isNaN(soil)) {
