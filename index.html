@@ -464,18 +464,15 @@ async function fetchData() {
   try {
     const res = await fetch(THINGSPEAK_URL);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
     const raw = await res.json();
 
     const temp     = parseFloat(raw.field1) || 0;
-const humidity = parseFloat(raw.field2) || 0;
-const soil     = parseInt(raw.field3)  || 0;
-
-    // Validate – ThingSpeak can return null fields
-    if (isNaN(temp) || isNaN(humidity) || isNaN(soil)) {
-      throw new Error("Invalid sensor values");
-    }
+    const humidity = parseFloat(raw.field2) || 0;
+    const soil     = parseInt(raw.field3)  || 0;
 
     return { soil, temp, humidity };
+
   } catch (err) {
     console.warn("Fetch error:", err.message);
     setConnectionStatus(false);
@@ -673,9 +670,12 @@ async function updateDashboard() {
   const data = await fetchData();
 
   // If fetch failed, leave UI as-is (connection badge already set to Disconnected)
-  if (!data) return;
+ if (!data) {
+  setConnectionStatus(false);
+  return;
+}
 
-  setConnectionStatus(true);
+setConnectionStatus(true);
 
   const { soil, temp, humidity: hum } = data;
 
