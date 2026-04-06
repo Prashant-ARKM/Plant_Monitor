@@ -442,12 +442,13 @@
 </div>
 
 <script>
+
 // ─────────────────────────────────────────────
 //  CONFIG
 // ─────────────────────────────────────────────
 const THINGSPEAK_CHANNEL = "3328369";
 const THINGSPEAK_URL     = `https://api.thingspeak.com/channels/${THINGSPEAK_CHANNEL}/feeds/last.json`;
-const REFRESH_MS         = 60000;   // match ESP8266 delay(20000)
+const REFRESH_MS         = 20000;   // ✅ FIXED (20 sec)
 const HISTORY_SIZE       = 10;
 
 // ─────────────────────────────────────────────
@@ -455,10 +456,10 @@ const HISTORY_SIZE       = 10;
 // ─────────────────────────────────────────────
 const history = { labels: [], soil: [], temp: [], hum: [] };
 let alertShown = false;
+let failCount = 0;   // ✅ NEW (for connection stability)
 
 // ─────────────────────────────────────────────
-//  DATA FETCH  (ThingSpeak)
-//  field1 = temp, field2 = humidity, field3 = soil%
+//  DATA FETCH
 // ─────────────────────────────────────────────
 async function fetchData() {
   try {
@@ -467,54 +468,49 @@ async function fetchData() {
 
     const raw = await res.json();
 
-    const temp     = parseFloat(raw.field1) || 0;
-    const humidity = parseFloat(raw.field2) || 0;
-    const soil     = parseInt(raw.field3)  || 0;
-
-    return { soil, temp, humidity };
+    return {
+      soil: parseInt(raw.field3) || 0,
+      temp: parseFloat(raw.field1) || 0,
+      humidity: parseFloat(raw.field2) || 0
+    };
 
   } catch (err) {
     console.warn("Fetch error:", err.message);
-    setConnectionStatus(false);
-    return null;
+    return null; // ❌ don't set disconnected here
   }
 }
 
 // ─────────────────────────────────────────────
-//  STRESS CLASSIFICATION  (single definition)
-//  Matches your Arduino logic (soilRaw → percent)
+//  STRESS LOGIC
 // ─────────────────────────────────────────────
 function getStressLevel(soil, temp, hum) {
-  // Critical: any single reading in danger zone
   if (soil < 25 || temp > 38 || hum < 30) return "HIGH STRESS";
-  // Moderate: any reading slightly off
   if (soil < 40 || temp > 32 || hum < 45) return "MODERATE STRESS";
-  // All good
   return "HEALTHY";
 }
 
 // ─────────────────────────────────────────────
-//  PER-SENSOR STATUS HELPERS
+//  STATUS HELPERS
 // ─────────────────────────────────────────────
 function getSoilStatus(v) {
-  if (v < 30) return { label: "🔴 Dry",      cls: "badge-red",    color: "#FF5252", bar: "#FF5252" };
+  if (v < 30) return { label: "🔴 Dry", cls: "badge-red", color: "#FF5252", bar: "#FF5252" };
   if (v < 60) return { label: "🟡 Moderate", cls: "badge-yellow", color: "#FFD740", bar: "#FFD740" };
-  return              { label: "🟢 Wet",      cls: "badge-green",  color: "#00C853", bar: "#00C853" };
+  return { label: "🟢 Wet", cls: "badge-green", color: "#00C853", bar: "#00C853" };
 }
 function getTempStatus(v) {
-  if (v > 35) return { label: "🔴 High",   cls: "badge-red",    color: "#FF5252", bar: "#FF5252" };
-  if (v > 30) return { label: "🟡 Warm",   cls: "badge-yellow", color: "#FFD740", bar: "#FFD740" };
-  return              { label: "🟢 Normal", cls: "badge-green",  color: "#00C853", bar: "#00C853" };
+  if (v > 35) return { label: "🔴 High", cls: "badge-red", color: "#FF5252", bar: "#FF5252" };
+  if (v > 30) return { label: "🟡 Warm", cls: "badge-yellow", color: "#FFD740", bar: "#FFD740" };
+  return { label: "🟢 Normal", cls: "badge-green", color: "#00C853", bar: "#00C853" };
 }
 function getHumStatus(v) {
-  if (v < 40) return { label: "🔴 Low",  cls: "badge-red",    color: "#FF5252", bar: "#FF5252" };
+  if (v < 40) return { label: "🔴 Low", cls: "badge-red", color: "#FF5252", bar: "#FF5252" };
   if (v < 50) return { label: "🟡 Fair", cls: "badge-yellow", color: "#FFD740", bar: "#FFD740" };
   if (v > 70) return { label: "🟡 High", cls: "badge-yellow", color: "#FFD740", bar: "#FFD740" };
-  return              { label: "🟢 Good", cls: "badge-green",  color: "#00C853", bar: "#00C853" };
+  return { label: "🟢 Good", cls: "badge-green", color: "#00C853", bar: "#00C853" };
 }
 
 // ─────────────────────────────────────────────
-//  UI UPDATERS
+//  UI
 // ─────────────────────────────────────────────
 function updateCard(valueId, badgeId, progId, cardId, value, status, maxVal) {
   document.getElementById(valueId).textContent = value;
@@ -522,144 +518,71 @@ function updateCard(valueId, badgeId, progId, cardId, value, status, maxVal) {
   badge.textContent = status.label;
   badge.className = "status-badge " + status.cls;
   const prog = document.getElementById(progId);
-  prog.style.width      = Math.min((value / maxVal) * 100, 100) + "%";
+  prog.style.width = Math.min((value / maxVal) * 100, 100) + "%";
   prog.style.background = status.bar;
   document.getElementById(cardId).style.setProperty("--card-accent", status.color);
 }
 
 function updateStressCard(level) {
-  const card  = document.getElementById("stress-card");
-  const icon  = document.getElementById("stress-icon");
   const label = document.getElementById("stress-label");
   const desc  = document.getElementById("stress-desc");
-  const d1    = document.getElementById("dot1");
-  const d2    = document.getElementById("dot2");
-  const d3    = document.getElementById("dot3");
-
-  [d1, d2, d3].forEach(d => d.classList.remove("active"));
 
   if (level === "HEALTHY") {
-    card.style.setProperty("--stress-color",   "#00C853");
-    card.style.setProperty("--stress-icon-bg", "#0d2b17");
-    card.style.borderColor = "#1a4d2a";
-    icon.textContent = "🌿";
-    label.style.color = "#00C853";
-    desc.textContent = "All sensor readings are within optimal range. Your plant is thriving!";
-    d1.classList.add("active");
+    label.textContent = "HEALTHY";
+    desc.textContent = "Plant is in optimal condition.";
   } else if (level === "MODERATE STRESS") {
-    card.style.setProperty("--stress-color",   "#FFD740");
-    card.style.setProperty("--stress-icon-bg", "#2a2000");
-    card.style.borderColor = "#3a2e00";
-    icon.textContent = "🌤️";
-    label.style.color = "#FFD740";
-    desc.textContent = "Some readings are slightly off. Monitor closely and take corrective action soon.";
-    d1.classList.add("active");
-    d2.classList.add("active");
-  } else {  // HIGH STRESS
-    card.style.setProperty("--stress-color",   "#FF5252");
-    card.style.setProperty("--stress-icon-bg", "#2a0d0d");
-    card.style.borderColor = "#4a1515";
-    icon.textContent = "🥀";
-    label.style.color = "#FF5252";
-    desc.textContent = "Critical conditions detected! Immediate action is required to save your plant.";
-    d1.classList.add("active");
-    d2.classList.add("active");
-    d3.classList.add("active");
+    label.textContent = "MODERATE STRESS";
+    desc.textContent = "Monitor plant conditions.";
+  } else {
+    label.textContent = "HIGH STRESS";
+    desc.textContent = "Immediate action required!";
   }
-  label.textContent = level;
 }
-
-function updateSuggestions(soil, temp, hum) {
-  const grid = document.getElementById("suggestions-grid");
-  grid.innerHTML = "";
-  const chips = [];
-  if (soil < 40) chips.push({ icon: "🚿", text: "Water the plant",               cls: "chip-blue"   });
-  if (temp > 32) chips.push({ icon: "🌬️", text: "Reduce temperature exposure",   cls: "chip-red"    });
-  if (hum  < 45) chips.push({ icon: "💦", text: "Increase ambient humidity",     cls: "chip-blue"   });
-  if (soil > 80) chips.push({ icon: "🛑", text: "Avoid overwatering",            cls: "chip-yellow" });
-  if (temp < 22) chips.push({ icon: "☀️",  text: "Provide more sunlight/warmth",  cls: "chip-yellow" });
-  if (chips.length === 0) chips.push({ icon: "✅", text: "No action needed — plant looks healthy!", cls: "" });
-
-  chips.forEach((c, i) => {
-    const el = document.createElement("div");
-    el.className = `suggestion-chip ${c.cls}`;
-    el.style.animationDelay = (i * 80) + "ms";
-    el.innerHTML = `<span class="chip-icon">${c.icon}</span> ${c.text}`;
-    grid.appendChild(el);
-  });
-}
-
-function showToast(msg) {
-  const toast = document.getElementById("alert-toast");
-  document.getElementById("toast-msg").textContent = msg;
-  toast.classList.add("show");
-  setTimeout(() => toast.classList.remove("show"), 6000);
-}
-function closeToast() { document.getElementById("alert-toast").classList.remove("show"); }
 
 function setConnectionStatus(connected) {
-  const pill  = document.getElementById("conn-pill");
+  const pill = document.getElementById("conn-pill");
   const label = document.getElementById("conn-label");
-  if (connected) { pill.classList.remove("disconnected"); label.textContent = "Connected"; }
-  else           { pill.classList.add("disconnected");    label.textContent = "Disconnected"; }
+  if (connected) {
+    pill.classList.remove("disconnected");
+    label.textContent = "Connected";
+  } else {
+    pill.classList.add("disconnected");
+    label.textContent = "Disconnected";
+  }
 }
-
-function updateClock() {
-  const now = new Date();
-  const pad = n => String(n).padStart(2, "0");
-  document.getElementById("live-clock").textContent =
-    `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-}
-function updateLastUpdated() {
-  document.getElementById("last-updated").textContent =
-    "Last updated: " + new Date().toLocaleTimeString();
-}
-setInterval(updateClock, 1000);
-updateClock();
 
 // ─────────────────────────────────────────────
 //  CHART
 // ─────────────────────────────────────────────
 const ctx = document.getElementById("sensorChart").getContext("2d");
+
 const sensorChart = new Chart(ctx, {
   type: "line",
   data: {
     labels: history.labels,
     datasets: [
-      { label: "Soil %",     data: history.soil, borderColor: "#00C853", backgroundColor: "rgba(0,200,83,.08)",   tension: .4, fill: true,  pointRadius: 4, pointBackgroundColor: "#00C853", borderWidth: 2.5 },
-      { label: "Temp °C",    data: history.temp, borderColor: "#FFD740", backgroundColor: "rgba(255,215,64,.06)", tension: .4, fill: false, pointRadius: 4, pointBackgroundColor: "#FFD740", borderWidth: 2.5 },
-      { label: "Humidity %", data: history.hum,  borderColor: "#40C4FF", backgroundColor: "rgba(64,196,255,.07)", tension: .4, fill: true,  pointRadius: 4, pointBackgroundColor: "#40C4FF", borderWidth: 2.5 }
+      { label: "Soil", data: history.soil, borderColor: "#00C853" },
+      { label: "Temp", data: history.temp, borderColor: "#FFD740" },
+      { label: "Humidity", data: history.hum, borderColor: "#40C4FF" }
     ]
-  },
-  options: {
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: "index", intersect: false },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: "#1E1E1E", titleColor: "#E0E0E0", bodyColor: "#A0A0A0",
-        borderColor: "#333", borderWidth: 1, padding: 10, cornerRadius: 8
-      }
-    },
-    scales: {
-      x: { grid: { color: "rgba(255,255,255,.06)" }, ticks: { color: "#757575", font: { size: 11 } } },
-      y: { min: 0, max: 100, grid: { color: "rgba(255,255,255,.06)" }, ticks: { color: "#757575", font: { size: 11 } } }
-    },
-    animation: { duration: 600, easing: "easeInOutQuart" }
   }
 });
 
-function pushHistory(soil, temp, hum) {
-  const now = new Date();
-  const pad = n => String(n).padStart(2, "0");
-  const label = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-  history.labels.push(label);
+function pushHistory(soil,temp,hum){
+  const t = new Date().toLocaleTimeString();
+
+  history.labels.push(t);
   history.soil.push(soil);
   history.temp.push(temp);
   history.hum.push(hum);
-  if (history.labels.length > HISTORY_SIZE) {
-    history.labels.shift(); history.soil.shift(); history.temp.shift(); history.hum.shift();
+
+  if(history.labels.length > HISTORY_SIZE){
+    history.labels.shift();
+    history.soil.shift();
+    history.temp.shift();
+    history.hum.shift();
   }
+
   sensorChart.update();
 }
 
@@ -667,46 +590,33 @@ function pushHistory(soil, temp, hum) {
 //  MAIN LOOP
 // ─────────────────────────────────────────────
 async function updateDashboard() {
+
   const data = await fetchData();
 
-  // If fetch failed, leave UI as-is (connection badge already set to Disconnected)
- if (!data) {
-  setConnectionStatus(false);
-  return;
-}
+  if (!data) {
+    failCount++;
+    if (failCount >= 2) setConnectionStatus(false); // ✅ only after 2 fails
+    return;
+  }
 
-setConnectionStatus(true);
+  failCount = 0;
+  setConnectionStatus(true);
 
   const { soil, temp, humidity: hum } = data;
 
-  // Update the three sensor cards
-  updateCard("val-soil", "badge-soil", "prog-soil", "card-soil", soil, getSoilStatus(soil), 100);
-  updateCard("val-temp", "badge-temp", "prog-temp", "card-temp", temp, getTempStatus(temp), 50);
-  updateCard("val-hum",  "badge-hum",  "prog-hum",  "card-hum",  hum,  getHumStatus(hum),  100);
+  updateCard("val-soil","badge-soil","prog-soil","card-soil",soil,getSoilStatus(soil),100);
+  updateCard("val-temp","badge-temp","prog-temp","card-temp",temp,getTempStatus(temp),50);
+  updateCard("val-hum","badge-hum","prog-hum","card-hum",hum,getHumStatus(hum),100);
 
-  // Stress classification (ONE call, correct signature)
-  const level = getStressLevel(soil, temp, hum);
-  updateStressCard(level);
-
-  // Suggestions & chart
-  updateSuggestions(soil, temp, hum);
-  pushHistory(soil, temp, hum);
-  updateLastUpdated();
-
-  // Low-soil alert
-  if (soil < 30) {
-    if (!alertShown) {
-      showToast(`Soil moisture is at ${soil}% — critically low! Water the plant immediately.`);
-      alertShown = true;
-    }
-  } else {
-    alertShown = false;
-  }
+  updateStressCard(getStressLevel(soil,temp,hum));
+  pushHistory(soil,temp,hum);
 }
 
-// Kick off immediately, then every 20 s (matching ESP8266 post interval)
+// ─────────────────────────────────────────────
+//  RUN
+// ─────────────────────────────────────────────
 updateDashboard();
 setInterval(updateDashboard, REFRESH_MS);
-</script>
-</body>
+
+</script></body>
 </html>
