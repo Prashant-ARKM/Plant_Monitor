@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Plant Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  /* ─── Reset & Base ─── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:          #0d1117;
+    --bg2:         #141b24;
+    --bg3:         #1c2633;
+    --glass:       rgba(255,255,255,0.04);
+    --glass-border:rgba(255,255,255,0.08);
+    --green:       #4ade80;
+    --green-dim:   rgba(74,222,128,0.12);
+    --green-glow:  rgba(74,222,128,0.35);
+    --yellow:      #fbbf24;
+    --yellow-dim:  rgba(251,191,36,0.12);
+    --yellow-glow: rgba(251,191,36,0.35);
+    --red:         #f87171;
+    --red-dim:     rgba(248,113,113,0.12);
+    --red-glow:    rgba(248,113,113,0.35);
+    --blue:        #60a5fa;
+    --blue-dim:    rgba(96,165,250,0.12);
+    --teal:        #2dd4bf;
+    --teal-dim:    rgba(45,212,191,0.12);
+    --text:        #e2e8f0;
+    --text-muted:  #64748b;
+    --text-dim:    #94a3b8;
+    --radius:      18px;
+    --radius-sm:   10px;
+    --shadow:      0 8px 32px rgba(0,0,0,0.4);
+    --transition:  0.35s cubic-bezier(.4,0,.2,1);
+    --nav-bg:      rgba(13,17,23,0.85);
+  }
+
+  /* ─── Light Theme Overrides ─── */
+  body.light {
+    --bg:          #f0f4f0;
+    --bg2:         #e4ede4;
+    --bg3:         #d6e4d6;
+    --glass:       rgba(255,255,255,0.65);
+    --glass-border:rgba(0,0,0,0.08);
+    --green:       #16a34a;
+    --green-dim:   rgba(22,163,74,0.1);
+    --green-glow:  rgba(22,163,74,0.25);
+    --yellow:      #d97706;
+    --yellow-dim:  rgba(217,119,6,0.1);
+    --yellow-glow: rgba(217,119,6,0.25);
+    --red:         #dc2626;
+    --red-dim:     rgba(220,38,38,0.1);
+    --red-glow:    rgba(220,38,38,0.25);
+    --blue:        #2563eb;
+    --blue-dim:    rgba(37,99,235,0.1);
+    --teal:        #0d9488;
+    --teal-dim:    rgba(13,148,136,0.1);
+    --text:        #1a2e1a;
+    --text-muted:  #5a7a5a;
+    --text-dim:    #4a6a4a;
+    --shadow:      0 8px 32px rgba(0,0,0,0.1);
+    --nav-bg:      rgba(240,244,240,0.92);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+    transition: background 0.4s ease, color 0.4s ease;
+  }
+
+  /* ─── Background Orbs ─── */
+  body::before, body::after {
+    content: '';
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(120px);
+    pointer-events: none;
+    z-index: 0;
+    transition: background 0.4s ease;
+  }
+  body::before {
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(74,222,128,0.07) 0%, transparent 70%);
+    top: -200px; left: -200px;
+    animation: drift 18s ease-in-out infinite alternate;
+  }
+  body::after {
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(96,165,250,0.06) 0%, transparent 70%);
+    bottom: -200px; right: -200px;
+    animation: drift 22s ease-in-out infinite alternate-reverse;
+  }
+  body.light::before {
+    background: radial-gradient(circle, rgba(22,163,74,0.08) 0%, transparent 70%);
+  }
+  body.light::after {
+    background: radial-gradient(circle, rgba(37,99,235,0.06) 0%, transparent 70%);
+  }
+  @keyframes drift {
+    from { transform: translate(0,0); }
+    to   { transform: translate(60px, 40px); }
+  }
+
+  /* ─── Theme Toggle ─── */
+  .theme-toggle {
+    position: relative;
+    width: 54px; height: 28px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background 0.35s ease, border-color 0.35s ease;
+    flex-shrink: 0;
+  }
+  .theme-toggle:hover { border-color: var(--green); }
+  .toggle-knob {
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--green), var(--teal));
+    box-shadow: 0 0 10px var(--green-glow);
+    transition: transform 0.35s cubic-bezier(.4,0,.2,1), background 0.35s ease;
+    display: grid; place-items: center;
+    font-size: 11px;
+    line-height: 1;
+  }
+  body.light .toggle-knob { transform: translateX(26px); }
+  .toggle-knob::after {
+    content: '🌙';
+  }
+  body.light .toggle-knob::after {
+    content: '☀️';
+  }
+
+  /* ─── Card transition for theme ─── */
+  .card, .status-card, .chart-section, .skeleton-card {
+    transition: transform var(--transition), box-shadow var(--transition),
+                border-color var(--transition), background 0.4s ease;
+  }
+  body.light .card:hover {
+    border-color: rgba(0,0,0,0.15);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.12), 0 0 0 1px var(--accent), inset 0 0 40px var(--accent-dim);
+  }
+  body.light .card::before {
+    background: linear-gradient(135deg, rgba(255,255,255,0.5) 0%, transparent 60%);
+  }
+  body.light .skeleton {
+    background: linear-gradient(90deg, var(--bg3) 25%, var(--bg2) 50%, var(--bg3) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--nav-bg);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--glass-border);
+    padding: 0 clamp(1rem, 4vw, 2.5rem);
+    height: 64px;
+    display: flex; align-items: center; justify-content: space-between;
+    transition: background 0.4s ease, border-color 0.4s ease;
+  }
+  .nav-brand {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .nav-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--green), var(--teal));
+    border-radius: 10px;
+    display: grid; place-items: center;
+    font-size: 18px;
+    box-shadow: 0 0 20px var(--green-glow);
+    animation: pulse-icon 3s ease-in-out infinite;
+  }
+  @keyframes pulse-icon {
+    0%,100% { box-shadow: 0 0 20px var(--green-glow); }
+    50%      { box-shadow: 0 0 35px var(--green-glow), 0 0 60px rgba(74,222,128,0.15); }
+  }
+  .nav-title {
+    font-family: 'Fraunces', serif;
+    font-size: 1.2rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    background: linear-gradient(90deg, var(--green), var(--teal));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .nav-right { display: flex; align-items: center; gap: 16px; }
+  .live-badge {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--green-dim);
+    border: 1px solid rgba(74,222,128,0.2);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--green);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .live-dot {
+    width: 7px; height: 7px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: blink 1.2s ease-in-out infinite;
+    box-shadow: 0 0 8px var(--green);
+  }
+  @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.3} }
+  .timestamp {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+  }
+
+  /* ─── Layout ─── */
+  main {
+    position: relative; z-index: 1;
+    padding: clamp(1.5rem, 4vw, 2.5rem) clamp(1rem, 4vw, 2.5rem);
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  /* ─── Section Label ─── */
+  .section-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 1.2rem;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--glass-border);
+  }
+
+  /* ─── Cards Grid ─── */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 2rem;
+  }
+
+  /* ─── Sensor Card ─── */
+  .card {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+    cursor: default;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 60%);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255,255,255,0.14);
+  }
+  .card.green  { --accent: var(--green);  --accent-dim: var(--green-dim);  --accent-glow: var(--green-glow);  }
+  .card.yellow { --accent: var(--yellow); --accent-dim: var(--yellow-dim); --accent-glow: var(--yellow-glow); }
+  .card.red    { --accent: var(--red);    --accent-dim: var(--red-dim);    --accent-glow: var(--red-glow);    }
+  .card.blue   { --accent: var(--blue);   --accent-dim: var(--blue-dim);   --accent-glow: rgba(96,165,250,0.3); }
+  .card.teal   { --accent: var(--teal);   --accent-dim: var(--teal-dim);   --accent-glow: rgba(45,212,191,0.3); }
+  .card:hover  { box-shadow: 0 16px 40px rgba(0,0,0,0.4), 0 0 0 1px var(--accent), inset 0 0 40px var(--accent-dim); }
+
+  /* Accent corner glow */
+  .card-glow {
+    position: absolute;
+    top: -40px; right: -40px;
+    width: 120px; height: 120px;
+    background: radial-gradient(circle, var(--accent-dim) 0%, transparent 70%);
+    border-radius: 50%;
+    transition: transform var(--transition);
+  }
+  .card:hover .card-glow { transform: scale(1.4); }
+
+  .card-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 1.2rem;
+  }
+  .card-icon-wrap {
+    width: 46px; height: 46px;
+    background: var(--accent-dim);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 13px;
+    display: grid; place-items: center;
+    font-size: 22px;
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .card-trend {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 6px;
+    padding: 3px 7px;
+  }
+  .card-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 0.4rem;
+  }
+  .card-value {
+    font-family: 'Fraunces', serif;
+    font-size: 2.6rem;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+    transition: color var(--transition);
+  }
+  .card-unit {
+    font-size: 1rem;
+    font-weight: 300;
+    opacity: 0.7;
+  }
+  .card-sub {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+  }
+
+  /* ─── Progress Bar ─── */
+  .progress-wrap {
+    margin-top: 1.2rem;
+    height: 4px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, transparent));
+    transition: width 1s cubic-bezier(.4,0,.2,1);
+    box-shadow: 0 0 8px var(--accent-glow);
+  }
+
+  /* ─── Status + Water Cards ─── */
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 2rem;
+  }
+  .status-card {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 1.8rem;
+    display: flex; align-items: center; gap: 1.5rem;
+    position: relative; overflow: hidden;
+    transition: transform var(--transition), box-shadow var(--transition);
+  }
+  .status-card:hover { transform: translateY(-3px); }
+  .status-card.healthy { --sc: var(--green); --sc-dim: var(--green-dim); --sc-glow: var(--green-glow); }
+  .status-card.moderate { --sc: var(--yellow); --sc-dim: var(--yellow-dim); --sc-glow: var(--yellow-glow); }
+  .status-card.high     { --sc: var(--red);    --sc-dim: var(--red-dim);    --sc-glow: var(--red-glow);    }
+  .status-card.water    { --sc: var(--blue);   --sc-dim: var(--blue-dim);   --sc-glow: rgba(96,165,250,0.3); }
+  .status-card.no-water { --sc: var(--teal);   --sc-dim: var(--teal-dim);   --sc-glow: rgba(45,212,191,0.3); }
+  .status-card:hover { box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px var(--sc); }
+
+  .status-icon-big {
+    width: 70px; height: 70px; flex-shrink: 0;
+    background: var(--sc-dim);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 18px;
+    display: grid; place-items: center;
+    font-size: 32px;
+    box-shadow: 0 0 24px var(--sc-glow);
+    position: relative;
+  }
+  .status-icon-big::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    border: 1px solid var(--sc);
+    opacity: 0.3;
+  }
+  .status-info { flex: 1; }
+  .status-tag {
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 0.35rem;
+  }
+  .status-title {
+    font-family: 'Fraunces', serif;
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--sc);
+    margin-bottom: 0.4rem;
+    line-height: 1.1;
+  }
+  .status-desc {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .pulse-ring {
+    position: absolute;
+    top: 50%; left: 1.8rem;
+    width: 70px; height: 70px;
+    border: 2px solid var(--sc);
+    border-radius: 18px;
+    transform: translateY(-50%);
+    opacity: 0;
+    animation: pulse-ring 2.5s ease-out infinite;
+  }
+  @keyframes pulse-ring {
+    0%   { transform: translateY(-50%) scale(1);   opacity: 0.4; }
+    100% { transform: translateY(-50%) scale(1.5); opacity: 0; }
+  }
+
+  /* ─── Chart Section ─── */
+  .chart-section {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 1.8rem;
+    margin-bottom: 2rem;
+    position: relative; overflow: hidden;
+  }
+  .chart-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.5rem; flex-wrap: wrap; gap: 10px;
+  }
+  .chart-title {
+    font-family: 'Fraunces', serif;
+    font-size: 1.1rem;
+    font-weight: 300;
+    font-style: italic;
+    color: var(--text);
+  }
+  .chart-pills {
+    display: flex; gap: 8px;
+  }
+  .chart-pill {
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--glass-border);
+    color: var(--text-muted);
+    background: var(--glass);
+  }
+  .chart-pill.active {
+    background: var(--green-dim);
+    border-color: rgba(74,222,128,0.25);
+    color: var(--green);
+  }
+  .chart-wrap { position: relative; height: 220px; }
+
+  /* ─── Skeleton Loader ─── */
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg3) 25%, var(--bg2) 50%, var(--bg3) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--radius-sm);
+  }
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  .skeleton-card {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .skel { border-radius: 6px; }
+
+  /* ─── Footer ─── */
+  footer {
+    position: relative; z-index: 1;
+    text-align: center;
+    padding: 2rem;
+    border-top: 1px solid var(--glass-border);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+  }
+  footer span { color: var(--green); }
+
+  /* ─── Update Flash ─── */
+  @keyframes flash-update {
+    0%   { box-shadow: 0 0 0 2px var(--green), 0 0 20px var(--green-glow); }
+    100% { box-shadow: none; }
+  }
+  .updated { animation: flash-update 1s ease-out; }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 600px) {
+    .nav-title { font-size: 1rem; }
+    .timestamp { display: none; }
+    .cards-grid { grid-template-columns: 1fr 1fr; }
+    .card-value { font-size: 2rem; }
+    .status-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 400px) {
+    .cards-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ─── Scroll Animation ─── */
+  .fade-in {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  .fade-in.visible { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav>
+  <div class="nav-brand">
+    <div class="nav-icon">🌿</div>
+    <span class="nav-title">Smart Plant Monitor</span>
+  </div>
+  <div class="nav-right">
+    <div class="live-badge"><div class="live-dot"></div> Live</div>
+    <div class="timestamp" id="timestamp">—</div>
+    <button class="theme-toggle" id="themeToggle" title="Toggle light/dark theme" aria-label="Toggle theme">
+      <div class="toggle-knob"></div>
+    </button>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main>
+
+  <!-- SKELETON (shown on load) -->
+  <div id="skeleton-layer">
+    <div class="section-label">Sensor Readings</div>
+    <div class="cards-grid" style="margin-bottom:2rem">
+      <div class="skeleton-card"><div class="skel skeleton" style="height:46px;width:46px;border-radius:13px"></div><div class="skel skeleton" style="height:12px;width:60%"></div><div class="skel skeleton" style="height:40px;width:50%"></div><div class="skel skeleton" style="height:4px;width:100%;margin-top:12px"></div></div>
+      <div class="skeleton-card"><div class="skel skeleton" style="height:46px;width:46px;border-radius:13px"></div><div class="skel skeleton" style="height:12px;width:60%"></div><div class="skel skeleton" style="height:40px;width:50%"></div><div class="skel skeleton" style="height:4px;width:100%;margin-top:12px"></div></div>
+      <div class="skeleton-card"><div class="skel skeleton" style="height:46px;width:46px;border-radius:13px"></div><div class="skel skeleton" style="height:12px;width:60%"></div><div class="skel skeleton" style="height:40px;width:50%"></div><div class="skel skeleton" style="height:4px;width:100%;margin-top:12px"></div></div>
+      <div class="skeleton-card"><div class="skel skeleton" style="height:46px;width:46px;border-radius:13px"></div><div class="skel skeleton" style="height:12px;width:60%"></div><div class="skel skeleton" style="height:40px;width:50%"></div><div class="skel skeleton" style="height:4px;width:100%;margin-top:12px"></div></div>
+    </div>
+    <div class="skeleton-card" style="margin-bottom:2rem;height:80px"></div>
+    <div class="skeleton-card" style="height:280px"></div>
+  </div>
+
+  <!-- REAL CONTENT (hidden until data loads) -->
+  <div id="real-content" style="display:none">
+
+    <!-- SENSOR CARDS -->
+    <div class="section-label fade-in">Sensor Readings</div>
+    <div class="cards-grid">
+
+      <!-- Soil Moisture -->
+      <div class="card green fade-in" id="card-moisture">
+        <div class="card-glow"></div>
+        <div class="card-header">
+          <div class="card-icon-wrap">🌱</div>
+          <div class="card-trend" id="moisture-trend">—</div>
+        </div>
+        <div class="card-label">Soil Moisture</div>
+        <div class="card-value" id="moisture-val">—<span class="card-unit">%</span></div>
+        <div class="card-sub" id="moisture-sub">Loading…</div>
+        <div class="progress-wrap"><div class="progress-bar" id="moisture-bar" style="width:0%"></div></div>
+      </div>
+
+      <!-- Temperature -->
+      <div class="card blue fade-in" id="card-temp">
+        <div class="card-glow"></div>
+        <div class="card-header">
+          <div class="card-icon-wrap">🌡️</div>
+          <div class="card-trend" id="temp-trend">—</div>
+        </div>
+        <div class="card-label">Temperature</div>
+        <div class="card-value" id="temp-val">—<span class="card-unit">°C</span></div>
+        <div class="card-sub" id="temp-sub">Loading…</div>
+        <div class="progress-wrap"><div class="progress-bar" id="temp-bar" style="width:0%"></div></div>
+      </div>
+
+      <!-- Humidity -->
+      <div class="card teal fade-in" id="card-humidity">
+        <div class="card-glow"></div>
+        <div class="card-header">
+          <div class="card-icon-wrap">💧</div>
+          <div class="card-trend" id="humidity-trend">—</div>
+        </div>
+        <div class="card-label">Humidity</div>
+        <div class="card-value" id="humidity-val">—<span class="card-unit">%</span></div>
+        <div class="card-sub" id="humidity-sub">Loading…</div>
+        <div class="progress-wrap"><div class="progress-bar" id="humidity-bar" style="width:0%"></div></div>
+      </div>
+
+
+    </div>
+
+    <!-- STATUS CARDS -->
+    <div class="section-label fade-in">Plant Diagnostics</div>
+    <div class="status-grid">
+      <div class="status-card fade-in" id="stress-card">
+        <div class="pulse-ring"></div>
+        <div class="status-icon-big" id="stress-icon">🌿</div>
+        <div class="status-info">
+          <div class="status-tag">Plant Stress Status</div>
+          <div class="status-title" id="stress-title">—</div>
+          <div class="status-desc" id="stress-desc">Analyzing sensor data…</div>
+        </div>
+      </div>
+      <div class="status-card fade-in" id="water-card">
+        <div class="pulse-ring"></div>
+        <div class="status-icon-big" id="water-icon">💧</div>
+        <div class="status-info">
+          <div class="status-tag">Water Recommendation</div>
+          <div class="status-title" id="water-title">—</div>
+          <div class="status-desc" id="water-desc">Evaluating moisture levels…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHART -->
+    <div class="section-label fade-in">Historical Trend</div>
+    <div class="chart-section fade-in">
+      <div class="chart-header">
+        <div class="chart-title">Soil Moisture over Time</div>
+        <div class="chart-pills">
+          <div class="chart-pill active">Live</div>
+          <div class="chart-pill">30 Min</div>
+          <div class="chart-pill">1 Hr</div>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="moistureChart"></canvas>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  Smart Plant Monitor &nbsp;·&nbsp; IoT Dashboard &nbsp;·&nbsp; Built with <span>♥</span> &nbsp;·&nbsp; Data refreshes every 5s
+</footer>
+
+<script>
+/* ─── Theme Toggle ───────────────────────────────────── */
+function updateChartTheme() {
+  const isLight = document.body.classList.contains('light');
+  const gridColor  = isLight ? 'rgba(0,0,0,0.06)'  : 'rgba(255,255,255,0.04)';
+  const tickColor  = isLight ? '#5a7a5a'            : '#475569';
+  const tooltipBg  = isLight ? 'rgba(255,255,255,0.96)' : 'rgba(20,27,36,0.95)';
+  const tooltipTitle = isLight ? '#5a7a5a' : '#64748b';
+  const lineColor  = isLight ? '#16a34a' : '#4ade80';
+  const ptBorder   = isLight ? '#f0f4f0' : '#0d1117';
+  const gradTop    = isLight ? 'rgba(22,163,74,0.18)' : 'rgba(74,222,128,0.25)';
+
+  if (!moistureChart) return;
+  const ctx  = moistureChart.ctx;
+  const grad = ctx.createLinearGradient(0, 0, 0, 220);
+  grad.addColorStop(0, gradTop);
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+
+  moistureChart.data.datasets[0].borderColor         = lineColor;
+  moistureChart.data.datasets[0].pointBackgroundColor = lineColor;
+  moistureChart.data.datasets[0].pointBorderColor     = ptBorder;
+  moistureChart.data.datasets[0].backgroundColor      = grad;
+  moistureChart.options.plugins.tooltip.backgroundColor = tooltipBg;
+  moistureChart.options.plugins.tooltip.titleColor      = tooltipTitle;
+  moistureChart.options.plugins.tooltip.bodyColor       = lineColor;
+  moistureChart.options.scales.x.grid.color  = gridColor;
+  moistureChart.options.scales.x.ticks.color = tickColor;
+  moistureChart.options.scales.y.grid.color  = gridColor;
+  moistureChart.options.scales.y.ticks.color = tickColor;
+  moistureChart.update('none');
+}
+
+function initThemeToggle() {
+  const btn = document.getElementById('themeToggle');
+  // Restore saved preference
+  if (localStorage.getItem('plantTheme') === 'light') {
+    document.body.classList.add('light');
+  }
+  btn.addEventListener('click', () => {
+    document.body.classList.toggle('light');
+    const isLight = document.body.classList.contains('light');
+    localStorage.setItem('plantTheme', isLight ? 'light' : 'dark');
+    updateChartTheme();
+  });
+}
+
+/* ─── State ─────────────────────────────────────────── */
+let prevData = null;
+const chartLabels = [];
+const chartData   = [];
+const MAX_POINTS  = 20;
+
+/* ─── Dummy Data Generator ───────────────────────────── */
+function generateData() {
+  const base = prevData || {
+    moisture:    55,
+    temperature: 26,
+    humidity:    62
+  };
+  const jitter = (v, range, min, max) =>
+    Math.min(max, Math.max(min, +(v + (Math.random()-0.5)*range).toFixed(1)));
+
+  return {
+    moisture:    jitter(base.moisture,    8,  5,  100),
+    temperature: jitter(base.temperature, 2, 15,  45),
+    humidity:    jitter(base.humidity,    5, 20,  95)
+  };
+}
+
+/* ─── Plant Stress Logic ─────────────────────────────── */
+function getStressInfo(moisture) {
+  if (moisture < 30) return {
+    level: 'High Stress', icon: '🥀', cls: 'high',
+    desc: 'Critical moisture deficit detected. Immediate intervention required to prevent irreversible tissue damage.'
+  };
+  if (moisture < 60) return {
+    level: 'Moderate', icon: '🌼', cls: 'moderate',
+    desc: 'Mild moisture stress observed. Plant is managing, but conditions should be improved soon.'
+  };
+  return {
+    level: 'Healthy', icon: '🌿', cls: 'healthy',
+    desc: 'Optimal conditions maintained. Plant is thriving with adequate moisture and balanced environment.'
+  };
+}
+
+function getWaterInfo(moisture) {
+  if (moisture < 40) return {
+    action: 'Water Now', icon: '🚿', cls: 'water',
+    desc: 'Soil moisture is critically low. Apply water immediately to restore hydration balance.'
+  };
+  return {
+    action: 'No Need', icon: '✅', cls: 'no-water',
+    desc: 'Moisture levels are sufficient. No watering required at this time. Monitor in 2–3 hours.'
+  };
+}
+
+/* ─── Trend Arrow ────────────────────────────────────── */
+function trend(curr, prev) {
+  if (prev === null) return '— ';
+  if (curr > prev + 0.5)  return '▲ ' + Math.abs(curr-prev).toFixed(1);
+  if (curr < prev - 0.5)  return '▼ ' + Math.abs(curr-prev).toFixed(1);
+  return '— ';
+}
+
+/* ─── Card Color by Value ────────────────────────────── */
+function moistureColor(v) { return v < 30 ? 'red' : v < 60 ? 'yellow' : 'green'; }
+function tempColor(v)     { return v > 35 ? 'red' : v < 18 ? 'yellow' : 'blue'; }
+
+/* ─── DOM Updater ────────────────────────────────────── */
+function updateCard(cardId, color) {
+  const card = document.getElementById(cardId);
+  card.className = `card ${color} fade-in visible`;
+  card.classList.add('updated');
+  setTimeout(() => card.classList.remove('updated'), 1000);
+}
+
+function setVal(id, val)  { document.getElementById(id).childNodes[0].textContent = val; }
+function setText(id, txt) { document.getElementById(id).textContent = txt; }
+
+/* ─── Chart Setup ────────────────────────────────────── */
+let moistureChart;
+function initChart() {
+  const ctx = document.getElementById('moistureChart').getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 220);
+  grad.addColorStop(0,   'rgba(74,222,128,0.25)');
+  grad.addColorStop(1,   'rgba(74,222,128,0)');
+
+  moistureChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: chartLabels,
+      datasets: [{
+        label: 'Soil Moisture (%)',
+        data: chartData,
+        borderColor: '#4ade80',
+        borderWidth: 2,
+        pointBackgroundColor: '#4ade80',
+        pointBorderColor: '#0d1117',
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        fill: true,
+        backgroundColor: grad,
+        tension: 0.45
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 600, easing: 'easeInOutQuart' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(20,27,36,0.95)',
+          borderColor: 'rgba(74,222,128,0.3)',
+          borderWidth: 1,
+          titleColor: '#64748b',
+          bodyColor: '#4ade80',
+          padding: 10,
+          bodyFont: { family: 'DM Mono', size: 13 },
+          titleFont: { family: 'DM Mono', size: 11 },
+          callbacks: { label: ctx => ` ${ctx.parsed.y.toFixed(1)}%` }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: {
+            color: '#475569',
+            font: { family: 'DM Mono', size: 10 },
+            maxTicksLimit: 8
+          }
+        },
+        y: {
+          min: 0, max: 100,
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: {
+            color: '#475569',
+            font: { family: 'DM Mono', size: 10 },
+            callback: v => v + '%'
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ─── Main Update Function ───────────────────────────── */
+function updateDashboard() {
+  const data  = generateData();
+  const prev  = prevData;
+
+  // Timestamp
+  const now = new Date();
+  document.getElementById('timestamp').textContent =
+    now.toLocaleTimeString('en-IN', { hour12: false }) + ' · ' +
+    now.toLocaleDateString('en-IN', { day:'2-digit', month:'short' });
+
+  // Moisture
+  const mc = moistureColor(data.moisture);
+  updateCard('card-moisture', mc);
+  setVal('moisture-val',  data.moisture.toFixed(1));
+  setText('moisture-trend', trend(data.moisture, prev?.moisture));
+  document.getElementById('moisture-bar').style.width = data.moisture + '%';
+  setText('moisture-sub', `Optimal: 60–80% · Current zone: ${mc === 'red' ? 'Critical' : mc === 'yellow' ? 'Moderate' : 'Good'}`);
+
+  // Temperature
+  const tc = tempColor(data.temperature);
+  updateCard('card-temp', tc);
+  setVal('temp-val', data.temperature.toFixed(1));
+  setText('temp-trend', trend(data.temperature, prev?.temperature));
+  document.getElementById('temp-bar').style.width = ((data.temperature - 15) / 30 * 100) + '%';
+  setText('temp-sub', data.temperature > 35 ? 'Heat stress risk — provide shade' : data.temperature < 18 ? 'Cold stress — consider cover' : 'Comfortable growing range');
+
+  // Humidity
+  updateCard('card-humidity', 'teal');
+  setVal('humidity-val', data.humidity.toFixed(1));
+  setText('humidity-trend', trend(data.humidity, prev?.humidity));
+  document.getElementById('humidity-bar').style.width = data.humidity + '%';
+  setText('humidity-sub', data.humidity < 40 ? 'Low humidity — misting recommended' : data.humidity > 80 ? 'High humidity — fungal risk' : 'Humidity within safe range');
+
+  // Stress Status
+  const stress = getStressInfo(data.moisture);
+  const sc      = document.getElementById('stress-card');
+  sc.className  = `status-card ${stress.cls} fade-in visible`;
+  setText('stress-icon',  stress.icon);
+  setText('stress-title', stress.level);
+  setText('stress-desc',  stress.desc);
+
+  // Water Recommendation
+  const water = getWaterInfo(data.moisture);
+  const wc    = document.getElementById('water-card');
+  wc.className = `status-card ${water.cls} fade-in visible`;
+  setText('water-icon',  water.icon);
+  setText('water-title', water.action);
+  setText('water-desc',  water.desc);
+
+  // Chart
+  const timeLabel = now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false });
+  chartLabels.push(timeLabel);
+  chartData.push(+data.moisture.toFixed(1));
+  if (chartLabels.length > MAX_POINTS) { chartLabels.shift(); chartData.shift(); }
+  moistureChart.update();
+
+  prevData = data;
+}
+
+/* ─── Fade-in Observer ───────────────────────────────── */
+function initObserver() {
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.fade-in').forEach(el => obs.observe(el));
+}
+
+/* ─── Boot Sequence ──────────────────────────────────── */
+window.addEventListener('DOMContentLoaded', () => {
+  initThemeToggle();
+  // Simulate loading delay (skeleton → real)
+  setTimeout(() => {
+    document.getElementById('skeleton-layer').style.display = 'none';
+    document.getElementById('real-content').style.display   = 'block';
+    initChart();
+    updateChartTheme();
+    updateDashboard();
+    initObserver();
+    setInterval(updateDashboard, 5000);
+  }, 1800);
+});
+</script>
+</body>
+</html>
